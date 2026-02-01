@@ -1,0 +1,387 @@
+<!DOCTYPE html>
+<html lang="nl">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>Valentine</title>
+<link href="https://fonts.googleapis.com/css2?family=Nunito:wght@300;400;600&display=swap" rel="stylesheet"/>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+
+  body {
+    min-height: 100vh;
+    background: #fff5f7;
+    background-image: radial-gradient(ellipse at 50% 50%, rgba(255,180,195,0.18) 0%, transparent 70%);
+    font-family: 'Nunito', sans-serif;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    overflow: hidden;
+  }
+
+  #catCanvas {
+    position: fixed;
+    top: 0; left: 0;
+    width: 100%; height: 100%;
+    z-index: 0;
+    pointer-events: none;
+  }
+
+  .container {
+    position: relative;
+    z-index: 10;
+    text-align: center;
+  }
+
+  h1 {
+    font-size: clamp(1.6rem, 4vw, 2.2rem);
+    font-weight: 300;
+    color: #c0566a;
+    margin-bottom: 2rem;
+    letter-spacing: 0.5px;
+  }
+
+  .buttons {
+    display: flex;
+    gap: 1rem;
+    justify-content: center;
+    flex-wrap: wrap;
+  }
+
+  .btn {
+    font-family: 'Nunito', sans-serif;
+    font-size: 1rem;
+    font-weight: 600;
+    padding: 0.7rem 2rem;
+    border-radius: 50px;
+    border: 2px solid #d4788a;
+    background: #fff;
+    color: #d4788a;
+    cursor: pointer;
+    transition: background 0.2s, color 0.2s;
+  }
+  .btn:hover {
+    background: #d4788a;
+    color: #fff;
+  }
+
+  .btn-yes {
+    background: #d4788a;
+    color: #fff;
+  }
+  .btn-yes:hover {
+    background: #c0566a;
+  }
+
+  .yes-screen {
+    display: none;
+    flex-direction: column;
+    align-items: center;
+    gap: 0.5rem;
+  }
+  .yes-screen.show { display: flex; }
+
+  .yes-screen h2 {
+    font-size: clamp(1.8rem, 5vw, 2.6rem);
+    font-weight: 300;
+    color: #c0566a;
+  }
+  .yes-screen p {
+    font-size: 1rem;
+    color: #888;
+    font-weight: 300;
+  }
+
+  /* ─── Kleine drijvende harten ─── */
+  .heart {
+    position: fixed;
+    pointer-events: none;
+    z-index: 1;
+    opacity: 0;
+    animation: driftHeart linear infinite;
+  }
+  @keyframes driftHeart {
+    0%   { transform: translateY(0) translateX(0) rotate(0deg); opacity: 0; }
+    8%   { opacity: 0.45; }
+    92%  { opacity: 0.3; }
+    100% { transform: translateY(-100vh) translateX(30px) rotate(180deg); opacity: 0; }
+  }
+
+  .no-counter {
+    position: fixed;
+    bottom: 1.5rem;
+    left: 50%;
+    transform: translateX(-50%);
+    font-size: 0.78rem;
+    color: #bbb;
+    z-index: 20;
+  }
+</style>
+</head>
+<body>
+
+<canvas id="catCanvas"></canvas>
+
+<div class="container" id="mainScreen">
+  <h1>Beste Saartje, Jij mijn valentijn?</h1>
+  <div class="buttons">
+    <button class="btn btn-yes" onclick="onYes()">Ja</button>
+    <button class="btn btn-no"  id="noBtn" onclick="onNo()">Nee</button>
+  </div>
+</div>
+
+<div class="container yes-screen" id="yesScreen">
+  <h2>Yippie ya yeah</h2>
+  <p>Contract vernieuwd B), ik hou van jou</p>
+</div>
+
+<div class="no-counter" id="noCounter"></div>
+
+<script>
+// ═══════════════════════════════════════════
+//  ORANJE KATJES — lopen in 4 richtingen
+// ═══════════════════════════════════════════
+(function() {
+  const canvas = document.getElementById('catCanvas');
+  const ctx    = canvas.getContext('2d');
+  let cats = [], W, H;
+  const directions = ['right','left','down','up'];
+
+  function resize() {
+    W = canvas.width  = window.innerWidth;
+    H = canvas.height = window.innerHeight;
+  }
+  window.addEventListener('resize', resize);
+  resize();
+
+  function createCat(startOffscreen) {
+    const size  = 32 + Math.random() * 28;
+    const dir   = directions[Math.floor(Math.random() * directions.length)];
+    let x, y;
+
+    if (startOffscreen) {
+      // Start buiten het scherm aan de juiste kant
+      if      (dir === 'right') { x = -size - 30; y = 60 + Math.random() * (H - 160); }
+      else if (dir === 'left')  { x = W + size + 30; y = 60 + Math.random() * (H - 160); }
+      else if (dir === 'down')  { x = 60 + Math.random() * (W - 160); y = -size - 30; }
+      else                      { x = 60 + Math.random() * (W - 160); y = H + size + 30; }
+    } else {
+      x = Math.random() * W;
+      y = Math.random() * H;
+    }
+
+    return {
+      x, y, size, dir,
+      speed: 0.4 + Math.random() * 0.7,
+      legPhase:  Math.random() * Math.PI * 2,
+      tailPhase: Math.random() * Math.PI * 2,
+      opacity: startOffscreen ? 0 : 0.5 + Math.random() * 0.3
+    };
+  }
+
+  // Begin met een paar katjes in willekeurige richtingen
+  for (let i = 0; i < 6; i++) cats.push(createCat(false));
+
+  // Teken een katje dat naar RECHTS loopt (de basis-richting).
+  // We draaien de canvas context voor andere richtingen.
+  function drawCatBase(cat) {
+    const s = cat.size / 40;
+    const orange = '#e8a87c';
+    const darker = '#c8845a';
+    const light  = '#f0c9a0';
+
+    // Staart (achter het lichaam)
+    cat.tailPhase += 0.06;
+    const tailWave = Math.sin(cat.tailPhase) * 8 * s;
+    ctx.strokeStyle = orange;
+    ctx.lineWidth = 3 * s;
+    ctx.lineCap = 'round';
+    ctx.beginPath();
+    ctx.moveTo(-10*s, 2*s);
+    ctx.quadraticCurveTo(-20*s, -6*s + tailWave, -16*s, -14*s + tailWave);
+    ctx.stroke();
+
+    // Lichaam
+    ctx.fillStyle = orange;
+    ctx.beginPath();
+    ctx.ellipse(0, 2*s, 12*s, 8*s, 0, 0, Math.PI*2);
+    ctx.fill();
+
+    // Benen
+    cat.legPhase += 0.15;
+    const leg = Math.sin(cat.legPhase) * 3 * s;
+    ctx.fillStyle = darker;
+    [[5, leg],[5, -leg],[-6, -leg],[-6, leg]].forEach(([bx, off]) => {
+      ctx.beginPath();
+      ctx.roundRect(bx*s + off, 6*s, 3*s, 7*s, 1.5*s);
+      ctx.fill();
+    });
+
+    // Hoofd
+    ctx.fillStyle = orange;
+    ctx.beginPath();
+    ctx.arc(12*s, -4*s, 8*s, 0, Math.PI*2);
+    ctx.fill();
+
+    // Oren (buiten)
+    ctx.fillStyle = darker;
+    ctx.beginPath();
+    ctx.moveTo(6*s, -10*s); ctx.lineTo(4*s, -20*s); ctx.lineTo(10*s, -12*s);
+    ctx.closePath(); ctx.fill();
+    ctx.beginPath();
+    ctx.moveTo(14*s, -10*s); ctx.lineTo(16*s, -20*s); ctx.lineTo(20*s, -12*s);
+    ctx.closePath(); ctx.fill();
+
+    // Oren (binnen)
+    ctx.fillStyle = light;
+    ctx.beginPath();
+    ctx.moveTo(6.8*s, -11*s); ctx.lineTo(5.5*s, -17.5*s); ctx.lineTo(9.2*s, -12.5*s);
+    ctx.closePath(); ctx.fill();
+    ctx.beginPath();
+    ctx.moveTo(14.2*s, -11*s); ctx.lineTo(15.5*s, -17.5*s); ctx.lineTo(18.8*s, -12.5*s);
+    ctx.closePath(); ctx.fill();
+
+    // Oogen
+    ctx.fillStyle = '#fff';
+    ctx.beginPath(); ctx.arc(9.5*s,  -4*s, 2.2*s, 0, Math.PI*2); ctx.fill();
+    ctx.beginPath(); ctx.arc(14.5*s, -4*s, 2.2*s, 0, Math.PI*2); ctx.fill();
+    ctx.fillStyle = '#333';
+    ctx.beginPath(); ctx.arc(9.5*s,  -3.8*s, 1.1*s, 0, Math.PI*2); ctx.fill();
+    ctx.beginPath(); ctx.arc(14.5*s, -3.8*s, 1.1*s, 0, Math.PI*2); ctx.fill();
+
+    // Neus
+    ctx.fillStyle = darker;
+    ctx.beginPath();
+    ctx.moveTo(12*s, -1.5*s); ctx.lineTo(11*s, -2.5*s); ctx.lineTo(13*s, -2.5*s);
+    ctx.closePath(); ctx.fill();
+
+    // Snorren
+    ctx.strokeStyle = 'rgba(100,60,40,0.35)';
+    ctx.lineWidth = 0.7 * s;
+    ctx.beginPath(); ctx.moveTo(11*s, -2*s);  ctx.lineTo(4*s,    -1.5*s); ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(11*s, -1*s);  ctx.lineTo(4.5*s,  -0.5*s); ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(13*s, -2*s);  ctx.lineTo(20*s,   -1.5*s); ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(13*s, -1*s);  ctx.lineTo(19.5*s, -0.5*s); ctx.stroke();
+  }
+
+  function drawCat(cat) {
+    ctx.save();
+    ctx.globalAlpha = cat.opacity;
+    ctx.translate(cat.x, cat.y);
+
+    // Draaien & spiegelen op basis van richting
+    // De basis tekent een kat die naar rechts loopt.
+    switch (cat.dir) {
+      case 'right': break;                          // standaard
+      case 'left':  ctx.scale(-1, 1); break;        // horizontaal spiegelen
+      case 'down':  ctx.rotate(Math.PI / 2); break; // 90° draaien
+      case 'up':    ctx.rotate(-Math.PI / 2); ctx.scale(-1, 1); break; // 90° en spiegelen
+    }
+
+    drawCatBase(cat);
+    ctx.restore();
+  }
+
+  function isOffscreen(cat) {
+    const pad = 80;
+    return cat.x < -pad || cat.x > W + pad || cat.y < -pad || cat.y > H + pad;
+  }
+
+  function animate() {
+    ctx.clearRect(0, 0, W, H);
+
+    // Occasional nieuw katje
+    if (Math.random() < 0.014) cats.push(createCat(true));
+
+    for (let i = cats.length - 1; i >= 0; i--) {
+      const cat = cats[i];
+
+      // Beweeg in de juiste richting
+      switch (cat.dir) {
+        case 'right': cat.x += cat.speed; break;
+        case 'left':  cat.x -= cat.speed; break;
+        case 'down':  cat.y += cat.speed; break;
+        case 'up':    cat.y -= cat.speed; break;
+      }
+
+      // Fade in
+      cat.opacity = Math.min(cat.opacity + 0.015, 0.55 + Math.random() * 0.001);
+
+      drawCat(cat);
+
+      if (isOffscreen(cat)) cats.splice(i, 1);
+    }
+    requestAnimationFrame(animate);
+  }
+  animate();
+})();
+
+
+// ═══════════════════════════════════════════
+//  KLEINE DRIJVENDE HARTEN
+// ═══════════════════════════════════════════
+(function() {
+  function spawn() {
+    const el = document.createElement('div');
+    el.className = 'heart';
+    el.textContent = ['❤️','💕','♡'][Math.floor(Math.random()*3)];
+    el.style.left = (5 + Math.random() * 88) + 'vw';
+    el.style.bottom = '-2rem';
+    el.style.fontSize = (0.7 + Math.random() * 0.7) + 'rem';
+    el.style.animationDuration = (8 + Math.random() * 6) + 's';
+    document.body.appendChild(el);
+    el.addEventListener('animationend', () => el.remove());
+  }
+  // Start een paar
+  for (let i = 0; i < 3; i++) setTimeout(spawn, i * 2000);
+  setInterval(spawn, 2800);
+})();
+
+
+// ═══════════════════════════════════════════
+//  NEE-KNOP
+// ═══════════════════════════════════════════
+let noCount = 0;
+const noBtn = document.getElementById('noBtn');
+const noCounterEl = document.getElementById('noCounter');
+
+function onNo() {
+  noCount++;
+
+  if (noCount >= 6) {
+    noBtn.style.transition = 'all 0.3s';
+    noBtn.style.opacity = '0';
+    noBtn.style.transform = 'scale(0)';
+    noCounterEl.textContent = 'de nee-knop is gevlucht 🐱';
+    setTimeout(() => noBtn.style.display = 'none', 350);
+    return;
+  }
+
+  const scale = Math.max(0.5, 1 - noCount * 0.1);
+  noBtn.style.fontSize = (1 * scale) + 'rem';
+  noBtn.style.padding  = (0.7 * scale) + 'rem ' + (2 * scale) + 'rem';
+
+  if (noCount === 1) {
+    noBtn.style.position = 'fixed';
+    noBtn.style.margin   = '0';
+  }
+
+  const w = noBtn.offsetWidth;
+  const h = noBtn.offsetHeight;
+  noBtn.style.left = (30 + Math.random() * (window.innerWidth  - w - 60)) + 'px';
+  noBtn.style.top  = (30 + Math.random() * (window.innerHeight - h - 60)) + 'px';
+
+  noCounterEl.textContent = noCount >= 5 ? '... are you sure? 👀' : '';
+}
+
+
+// ═══════════════════════════════════════════
+//  JA-KNOP
+// ═══════════════════════════════════════════
+function onYes() {
+  document.getElementById('mainScreen').style.display = 'none';
+  document.getElementById('yesScreen').classList.add('show');
+}
+</script>
+</body>
+</html>
